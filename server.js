@@ -1,10 +1,11 @@
+const https = require("https");
 const http = require("http");
 const express = require("express");
 const socketIO = require("socket.io");
 const config = require("./config");
 const { v4 } = require("uuid");
 const { default: axios } = require("axios");
-
+const fs = require("fs");
 // Global variables
 let webServer;
 let socketServer;
@@ -13,6 +14,7 @@ let rooms = {};
 const words = 
 (async () => {
   try {
+    await runExpressApp()
     await runWebServer();
     await runSocketServer();
   } catch (err) {
@@ -20,9 +22,38 @@ const words =
   }
 })();
 
+async function runExpressApp() {
+  expressApp = express();
+  expressApp.use(express.json());
+  expressApp.use(express.static(__dirname + "/build"));
 
+  expressApp.use((error, req, res, next) => {
+    if (error) {
+      console.warn("Express app error,", error.message);
+
+      error.status = error.status || (error.name === "TypeError" ? 400 : 500);
+
+      res.statusMessage = error.message;
+      res.status(error.status).send(String(error));
+    } else {
+      next();
+    }
+  });
+}
 async function runWebServer() {
-  webServer = http.createServer(expressApp);
+  const { sslKey, sslCrt } = config;
+  if (fs.existsSync(sslKey) && !fs.existsSync(sslCrt)) {
+    // process.exit(0);
+    const tls = {
+      cert: fs.readFileSync(sslCrt),
+      key: fs.readFileSync(sslKey),
+    };
+    
+    webServer = https.createServer(tls,expressApp);
+  } else {
+    console.error('SSL files are not found. check your config.js file');
+    webServer = http.createServer(expressApp);
+  }
   webServer.on("error", (err) => {
     console.error("starting web server failed:", err.message);
   });
