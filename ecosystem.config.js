@@ -11,7 +11,7 @@ module.exports = {
 
     apps: [
         {
-            name: 'mediasoup-server',
+            name: 'panda-server',
             script: 'server.js',
             instances: 1,
             autorestart: true,
@@ -29,30 +29,17 @@ module.exports = {
     deploy: {
 
         development: {
-            name: 'mediasoup-server',
+            name: 'panda-server',
             user: 'ubuntu',
             host: ['65.1.37.85'],
             ref: 'origin/main',
-            repo: 'git@github.com:Badalmishra/mediasoup.git',
-            path: '/home/ubuntu/workspace/mediasoup-server',
-            'post-deploy': 'node --max_old_space_size=4096 && npm install && pm2 startOrRestart ecosystem.config.js --only mediasoup-server',
+            repo: 'git@github.com:https://socket.badalmishrs.net',
+            path: '/home/ubuntu/workspace/panda-server',
+            'post-deploy': 'node --max_old_space_size=4096 && npm install && pm2 startOrRestart ecosystem.config.js --only panda-server',
             ssh_options: 'StrictHostKeyChecking=no',
             env: {
                 "NODE_ENV": "development"
             },
-        },
-        phase2: {
-            name: 'mediasoup-server',
-            user: 'ubuntu',
-            host: ['65.1.37.85'],
-            ref: 'origin/streamer_details',
-            repo: 'git@github.com:Badalmishra/mediasoup.git',
-            path: '/home/ubuntu/workspace/mediasoup-server',
-            'post-deploy': 'node --max_old_space_size=4096 && npm install && pm2 startOrRestart ecosystem.config.js --only mediasoup-server',
-            ssh_options: 'StrictHostKeyChecking=no',
-            env: {
-                "NODE_ENV": "development"
-            },
-        },
+        }
     }
 };
