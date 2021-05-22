@@ -33,7 +33,7 @@ module.exports = {
             user: 'ubuntu',
             host: ['65.1.37.85'],
             ref: 'origin/main',
-            repo: 'git@github.com:https://socket.badalmishrs.net',
+            repo: 'git@github.com:Badalmishra/panda-backend.git',
             path: '/home/ubuntu/workspace/panda-server',
             'post-deploy': 'node --max_old_space_size=4096 && npm install && pm2 startOrRestart ecosystem.config.js --only panda-server',
             ssh_options: 'StrictHostKeyChecking=no',
