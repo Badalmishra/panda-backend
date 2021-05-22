@@ -42,7 +42,7 @@ async function runExpressApp() {
 }
 async function runWebServer() {
   const { sslKey, sslCrt } = config;
-  if (fs.existsSync(sslKey) && !fs.existsSync(sslCrt)) {
+  if (fs.existsSync(sslKey) && fs.existsSync(sslCrt)) {
     // process.exit(0);
     console.log('SSL files are  found. https mode is on');
     const tls = {
