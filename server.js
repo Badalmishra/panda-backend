@@ -3,12 +3,14 @@ const express = require("express");
 const socketIO = require("socket.io");
 const config = require("./config");
 const { v4 } = require("uuid");
+const { default: axios } = require("axios");
 
 // Global variables
 let webServer;
 let socketServer;
 let expressApp;
-let rooms ={};
+let rooms = {};
+const words = 
 (async () => {
   try {
     await runWebServer();
@@ -18,8 +20,9 @@ let rooms ={};
   }
 })();
 
+
 async function runWebServer() {
-  webServer = http.createServer( expressApp);
+  webServer = http.createServer(expressApp);
   webServer.on("error", (err) => {
     console.error("starting web server failed:", err.message);
   });
@@ -27,7 +30,6 @@ async function runWebServer() {
   await new Promise((resolve) => {
     const { listenIp, listenPort } = config;
     webServer.listen(listenPort, listenIp, () => {
-    
       console.log("server is running");
       console.log(`open https://${listenIp}:${listenPort} in your web browser`);
       resolve();
@@ -36,6 +38,15 @@ async function runWebServer() {
 }
 
 async function runSocketServer() {
+  const getWord = async ()=>{
+    try {
+      
+      return await axios.get('https://random-word-api.herokuapp.com//word?number=1')
+    } catch (error) {
+      console.log('getWord error:::::::::: ', error);
+      return []
+    }
+  }
   socketServer = socketIO(webServer, {
     serveClient: false,
     path: "/server",
@@ -43,89 +54,127 @@ async function runSocketServer() {
   });
 
   socketServer.on("connection", (socket) => {
-    console.log(' socket.handshake.query: ',  socket.handshake.query.id);
-    socket.on("disconnect", () => {
-        rooms[socket.handshake.query.roomId].userList =
-        rooms[socket.handshake.query.roomId].userList.filter(user=>user.id !=socket.handshake.query.id)
-        socketServer
-          .in(socket.handshake.query.roomId)
-          .emit("peerDisconnected", { user:socket.handshake.query });
-      })
-  
+    socket.join(socket.handshake.query.id);
 
-    socket.on("connect_error", (err) => {
-      console.error("client connection error", err);
+    socket.on("disconnect", () => {
+      const currentRoomId = socket.handshake.query.roomId;
+      rooms[currentRoomId].userList = rooms[currentRoomId].userList.filter(
+        (user) => user.id != socket.handshake.query.id
+      );
+      const currentTurn = rooms[currentRoomId].turn
+      let newTurn = {};
+      if (rooms[currentRoomId].userList.length > 0) {
+        if (currentTurn) {
+          const indexOCurrentTurn = rooms[currentRoomId].userList.indexOf(currentTurn);
+          const newIndex = indexOCurrentTurn + 1;
+          if (newIndex > rooms[currentRoomId].userList.length - 1) {
+            newTurn = rooms[currentRoomId].userList[0];
+          } else {
+            newTurn = rooms[currentRoomId].userList[newIndex];
+          }
+        } else {
+          newTurn =false;
+        }
+      } else {
+        newTurn = false
+      }
+      rooms[currentRoomId].turn = newTurn
+      socketServer.in(currentRoomId).emit("turn", newTurn);
+      if (newTurn) {
+        socketServer.in(newTurn.id).emit("word", rooms[currentRoomId].word);
+      }
+      socketServer
+        .in(currentRoomId)
+        .emit("peerDisconnected", { user: socket.handshake.query });
     });
+
 
     socket.on("room", (data, callback) => {
       socket.join(data.roomId);
       socketServer
-          .in(socket.handshake.query.roomId)
-          .emit("newPeerConnected", { user:socket.handshake.query });
+        .in(socket.handshake.query.roomId)
+        .emit("newPeerConnected", { user: socket.handshake.query });
+      const newUser = { ...socket.handshake.query, point: 0 };
       if (rooms[data.roomId]) {
-        rooms[data.roomId].userList.push(socket.handshake.query)
+        rooms[data.roomId].userList.push(newUser);
       } else {
-        rooms = {...rooms,
-            [data.roomId]:{
-            userList:[socket.handshake.query]
-          }
+        rooms = {
+          ...rooms,
+          [data.roomId]: {
+            userList: [newUser],
+          },
+        };
       }
-    }
-    const currentTurn = rooms[data.roomId].turn
-    socketServer
-        .in(data.roomId)
-        .emit("turn", currentTurn);
-      callback("joined",{...rooms[data.roomId] });
-    });
-    socket.on("passTurn", (data, callback) => {
-      const roomId = socket.handshake.query.roomId
-      const currentTurn = rooms[roomId].turn
-      console.log('currentTurn: ', currentTurn);
-      let newTurn = {}
+      const currentTurn = rooms[data.roomId].turn;
+      socketServer.in(data.roomId).emit("turn", currentTurn);
       if (currentTurn) {
-        const indexOCurrentTurn = rooms[roomId].userList.indexOf(currentTurn)
-        const newIndex = indexOCurrentTurn+1
-        if (newIndex>  (rooms[roomId].userList.length-1)) {
-          newTurn =  rooms[roomId].userList[0]
+        socketServer.in(currentTurn.id).emit("word",  rooms[data.roomId].word);
+      }
+      socketServer
+        .in(socket.handshake.query.id)
+        .emit("joined", { ...rooms[data.roomId] });
+    });
+    
+    socket.on("passTurn", async (data, callback) => {
+      const roomId = socket.handshake.query.roomId;
+      const currentTurn = rooms[roomId].turn;
+      console.log("currentTurn: ", currentTurn);
+      let newTurn = {};
+      if (currentTurn) {
+        const indexOCurrentTurn = rooms[roomId].userList.indexOf(currentTurn);
+        const newIndex = indexOCurrentTurn + 1;
+        if (newIndex > rooms[roomId].userList.length - 1) {
+          newTurn = rooms[roomId].userList[0];
         } else {
-          newTurn =   rooms[roomId].userList[newIndex]
+          newTurn = rooms[roomId].userList[newIndex];
         }
       } else {
-        newTurn =  rooms[roomId].userList[0]
+        newTurn = rooms[roomId].userList[0];
       }
-      rooms[roomId].turn = newTurn
-      console.log('newTurn: ', newTurn);
-      socketServer
-          .in(socket.handshake.query.roomId)
-          .emit("turn", newTurn);
-    
+      const word = await getWord()
+      console.log('word: ', word.data);
+      rooms[roomId].word = word.data[0]
+      rooms[roomId].turn = newTurn;
+      console.log("newTurn: ", newTurn);
+      socketServer.in(socket.handshake.query.roomId).emit("turn", newTurn);
+      socketServer.in(newTurn.id).emit("word", word.data[0]);
     });
 
     socket.on("message", (data, callback) => {
       try {
-        const {message} = data
-        const roomId = socket.handshake.query.roomId
-        const time= new Date().getTime()
+        const { message } = data;
+        const roomId = socket.handshake.query.roomId;
+        const currentUser = rooms[roomId].userList.find(e=>e.id===socket.handshake.query.id)
+        const time = new Date().getTime();
         const payload = {
           ...socket.handshake.query,
-          sender:socket.handshake.query.id,
-          id:v4(),
-          time:time,
+          sender: socket.handshake.query.id,
+          id: v4(),
+          time: time,
           message,
+        };
+        if (message === rooms[roomId].word ) {
+          payload.isAnswer = true
+          payload.message = 'Got it!👍'
+          if (currentUser.lastGuess !== message) {
+            currentUser.point = currentUser.point+1
+          }
+          currentUser.lastGuess = message
+          console.log('rooms[roomId: ', rooms[roomId]);
+          socketServer.in(roomId).emit("joined", rooms[roomId]);
         }
-        socketServer.in(roomId).emit("message",payload);
+        socketServer.in(roomId).emit("message", payload);
       } catch (error) {
-        console.log('error in toroom',error)
+        console.log("error in toroom", error);
       }
     });
     socket.on("canvas", (data, callback) => {
       try {
-        const roomId = socket.handshake.query.roomId
-        socketServer.in(roomId).emit("canvas",data);
+        const roomId = socket.handshake.query.roomId;
+        socketServer.in(roomId).emit("canvas", data);
       } catch (error) {
-        console.log('error in toroom',error)
+        console.log("error in toroom", error);
       }
     });
   });
 }
-
