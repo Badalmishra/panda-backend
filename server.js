@@ -163,6 +163,7 @@ async function runSocketServer() {
       } else {
         newTurn = rooms[roomId].userList[0];
       }
+      newTurn.previousWord = rooms[roomId].word
       const word = await getWord()
       console.log('word: ', word.data);
       rooms[roomId].word = word.data[0]
